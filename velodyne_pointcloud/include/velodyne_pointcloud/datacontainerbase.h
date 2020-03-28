@@ -123,10 +123,11 @@ public:
   {
     cloud.data.resize(cloud.point_step * cloud.width * cloud.height);
 
-    if (!config_.target_frame.empty())
-    {
-      cloud.header.frame_id = config_.target_frame;
-    }
+    cloud.header.frame_id = config_.fixed_frame;
+    // if (!config_.target_frame.empty())
+    // {
+    //   cloud.header.frame_id = config_.target_frame;
+    // }
 
     ROS_DEBUG_STREAM("Prepared cloud width" << cloud.height * cloud.width
                                             << " Velodyne points, time: " << cloud.header.stamp);
@@ -159,10 +160,15 @@ public:
 
   inline bool computeTransformation(const ros::Time& time)
   {
-    tf::StampedTransform transform;
+    tf::StampedTransform transform1;
+    tf::StampedTransform transform2;
     try
     {
-      tf_ptr->lookupTransform(config_.target_frame, cloud.header.frame_id, time, transform);
+      tf_ptr->lookupTransform(config_.target_frame, cloud.header.frame_id, time, transform1);
+      tf_ptr->lookupTransform(cloud.header.frame_id, config_.target_frame, cloud.header.stamp, transform2);
+      // transform = tf_ptr->lookupTransform(cloud.header.frame_id, time, 
+      //                         cloud.header.frame_id, cloud.header.stamp,
+      //                         config_.target_frame,ros::Duration(1.0));
     }
     catch (tf::LookupException& e)
     {
@@ -175,13 +181,23 @@ public:
       return false;
     }
 
-    tf::Quaternion quaternion = transform.getRotation();
-    Eigen::Quaternionf rotation(quaternion.w(), quaternion.x(), quaternion.y(), quaternion.z());
+    // 1
+    tf::Quaternion quaternion1 = transform1.getRotation();
+    Eigen::Quaternionf rotation1(quaternion1.w(), quaternion1.x(), quaternion1.y(), quaternion1.z());
 
-    Eigen::Vector3f eigen_origin;
-    vectorTfToEigen(transform.getOrigin(), eigen_origin);
-    Eigen::Translation3f translation(eigen_origin);
-    transformation = translation * rotation;
+    Eigen::Vector3f eigen_origin1;
+    vectorTfToEigen(transform1.getOrigin(), eigen_origin1);
+    Eigen::Translation3f translation1(eigen_origin1);
+    
+    // 2
+    tf::Quaternion quaternion2 = transform2.getRotation();
+    Eigen::Quaternionf rotation2(quaternion2.w(), quaternion2.x(), quaternion2.y(), quaternion2.z());
+
+    Eigen::Vector3f eigen_origin2;
+    vectorTfToEigen(transform2.getOrigin(), eigen_origin2);
+    Eigen::Translation3f translation2(eigen_origin2);
+    
+    transformation = (translation1 * rotation1) * (translation2 * rotation2);
     return true;
   }
 
